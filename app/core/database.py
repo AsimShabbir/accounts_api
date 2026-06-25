@@ -1,46 +1,24 @@
-import os
-
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.core.config import settings
 
 _client: AsyncIOMotorClient | None = None
 _database: AsyncIOMotorDatabase | None = None
-_indexes_ensured: bool = False
-
-
-async def ensure_connected() -> AsyncIOMotorDatabase:
-    global _client, _database, _indexes_ensured
-
-    if not settings.MONGODB_URI:
-        raise RuntimeError("MONGODB_URI environment variable is not set")
-
-    if _database is None:
-        _client = AsyncIOMotorClient(
-            settings.MONGODB_URI,
-            serverSelectionTimeoutMS=10000,
-            connectTimeoutMS=10000,
-        )
-        _database = _client[settings.MONGODB_DATABASE]
-
-    if not _indexes_ensured:
-        await _ensure_indexes()
-        _indexes_ensured = True
-
-    return _database
 
 
 async def connect_to_mongodb() -> None:
-    await ensure_connected()
+    global _client, _database
+    _client = AsyncIOMotorClient(settings.MONGODB_URI)
+    _database = _client[settings.MONGODB_DATABASE]
+    await _ensure_indexes()
 
 
 async def close_mongodb_connection() -> None:
-    global _client, _database, _indexes_ensured
+    global _client, _database
     if _client:
         _client.close()
     _client = None
     _database = None
-    _indexes_ensured = False
 
 
 def get_database() -> AsyncIOMotorDatabase:

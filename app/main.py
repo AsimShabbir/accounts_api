@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-import os
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.application.exceptions import ApplicationError
 from app.core.config import settings
-from app.core.database import close_mongodb_connection, connect_to_mongodb, ensure_connected
+from app.core.database import close_mongodb_connection, connect_to_mongodb
 from app.presentation.api.v1 import auth, chart_of_accounts, reports, vouchers
 from app.presentation.auth_dependencies import get_current_user
 
@@ -24,8 +23,7 @@ PUBLIC_OPERATIONS = {
 async def lifespan(_: FastAPI):
     await connect_to_mongodb()
     yield
-    if not os.getenv("VERCEL"):
-        await close_mongodb_connection()
+    await close_mongodb_connection()
 
 
 app = FastAPI(
@@ -41,14 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.middleware("http")
-async def ensure_database_middleware(request: Request, call_next):
-    # Vercel serverless may not run lifespan; connect lazily per request.
-    if request.url.path != "/health":
-        await ensure_connected()
-    return await call_next(request)
 
 
 def custom_openapi():
@@ -86,14 +76,6 @@ async def application_error_handler(_: Request, exc: ApplicationError):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.message, "success": False},
-    )
-
-
-@app.exception_handler(RuntimeError)
-async def runtime_error_handler(_: Request, exc: RuntimeError):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc), "success": False},
     )
 
 
