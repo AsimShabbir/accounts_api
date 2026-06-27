@@ -1,75 +1,58 @@
 import streamlit as st
 
-from app.application.exceptions import ApplicationError
-from streamlit_ui.bootstrap import get_auth_service, run_async
+from streamlit_ui.api_client import get_api_base_url
+from streamlit_ui.stitch_loader import get_stitch_api_key, get_stitch_project_id, sync_screens_to_cache
+from streamlit_ui.stitch_renderer import render_stitch_login, stitch_available
 
 
 def require_login() -> bool:
     return bool(st.session_state.get("user"))
 
 
+def apply_auth_callback() -> None:
+    params = st.query_params
+    if params.get("logout") == "1":
+        for key in ("user", "access_token", "refresh_token"):
+            st.session_state.pop(key, None)
+        st.query_params.clear()
+        st.rerun()
+
+    if params.get("access_token") and params.get("refresh_token"):
+        import json
+
+        try:
+            user = json.loads(params.get("user", "{}"))
+        except json.JSONDecodeError:
+            user = {}
+
+        st.session_state.access_token = params.get("access_token")
+        st.session_state.refresh_token = params.get("refresh_token")
+        st.session_state.user = user
+        st.query_params.clear()
+        st.rerun()
+
+
 def render_login() -> None:
-    st.title("Accounting System")
-    st.caption("Sign in to manage accounts, vouchers, and reports.")
+    apply_auth_callback()
 
-    tab_login, tab_register = st.tabs(["Login", "Register"])
+    if not stitch_available("login"):
+        st.error(
+            f"Stitch login screen not found for project `{get_stitch_project_id()}`. "
+            "Set `STITCH_API_KEY` in `.env` and run `python scripts/sync_stitch_screens.py`."
+        )
+        st.info(f"API: {get_api_base_url()}")
 
-    with tab_login:
-        with st.form("login_form"):
-            username_or_email = st.text_input("Email or username")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Login", type="primary")
-
-        if submitted:
+        if get_stitch_api_key() and st.button("Sync Stitch screens now"):
             try:
-                user, access_token, refresh_token = run_async(
-                    get_auth_service().login(username_or_email, password)
-                )
-                st.session_state.user = {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "full_name": user.full_name,
-                }
-                st.session_state.access_token = access_token
-                st.session_state.refresh_token = refresh_token
-                st.success("Logged in successfully.")
+                sync_screens_to_cache()
+                st.success("Stitch screens synced. Refresh the page.")
                 st.rerun()
-            except ApplicationError as exc:
-                st.error(exc.message)
+            except Exception as exc:
+                st.error(str(exc))
+        return
 
-    with tab_register:
-        with st.form("register_form"):
-            username = st.text_input("Username")
-            email = st.text_input("Email")
-            full_name = st.text_input("Full name")
-            password = st.text_input("Password", type="password", key="reg_password")
-            submitted = st.form_submit_button("Create account")
-
-        if submitted:
-            try:
-                user = run_async(
-                    get_auth_service().register_user(
-                        {
-                            "username": username,
-                            "email": email,
-                            "full_name": full_name,
-                            "password": password,
-                        }
-                    )
-                )
-                st.success(f"Account created for {user.username}. Please log in.")
-            except ApplicationError as exc:
-                st.error(exc.message)
+    render_stitch_login()
 
 
 def render_sidebar() -> None:
-    user = st.session_state.get("user", {})
-    st.sidebar.title("Accounting")
-    st.sidebar.write(f"**{user.get('full_name', '')}**")
-    st.sidebar.caption(user.get("email", ""))
-
-    if st.sidebar.button("Logout"):
-        for key in ("user", "access_token", "refresh_token"):
-            st.session_state.pop(key, None)
-        st.rerun()
+    pass
