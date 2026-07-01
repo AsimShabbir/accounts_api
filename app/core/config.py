@@ -30,5 +30,16 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
+    @property
+    def mongodb_uri(self) -> str:
+        if self.MONGODB_URI:
+            return self.MONGODB_URI
+        if self.MONGODB_USERNAME and self.MONGODB_PASSWORD:
+            return (
+                f"mongodb+srv://{self.MONGODB_USERNAME}:{self.MONGODB_PASSWORD}"
+                f"@cluster0.mongodb.net/{self.MONGODB_DATABASE}?retryWrites=true&w=majority"
+            )
+        return ""
+
 
 settings = Settings()

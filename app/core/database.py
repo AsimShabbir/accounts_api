@@ -4,13 +4,25 @@ from app.core.config import settings
 
 _client: AsyncIOMotorClient | None = None
 _database: AsyncIOMotorDatabase | None = None
+_indexes_ensured: bool = False
 
 
 async def connect_to_mongodb() -> None:
-    global _client, _database
-    _client = AsyncIOMotorClient(settings.MONGODB_URI)
+    global _client, _database, _indexes_ensured
+
+    if _database is not None:
+        return
+
+    uri = settings.mongodb_uri
+    if not uri:
+        raise RuntimeError("MONGODB_URI is not configured. Set it in Vercel/host environment variables.")
+
+    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000)
     _database = _client[settings.MONGODB_DATABASE]
-    await _ensure_indexes()
+
+    if not _indexes_ensured:
+        await _ensure_indexes()
+        _indexes_ensured = True
 
 
 async def close_mongodb_connection() -> None:

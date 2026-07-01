@@ -46,8 +46,8 @@ app.add_middleware(
 )
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
-static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 def custom_openapi():
