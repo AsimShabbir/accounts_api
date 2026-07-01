@@ -26,19 +26,23 @@ class MongoReportRepository(ReportRepository):
             doc = await self._collection.find_one({"_id": result.inserted_id})
         return FinancialReport(**self._to_entity(doc))
 
-    async def get_by_id(self, report_id: str) -> FinancialReport | None:
-        doc = await self._collection.find_one({"_id": to_object_id(report_id)})
+    async def get_by_id(self, report_id: str, company_id: str | None = None) -> FinancialReport | None:
+        query: dict = {"_id": to_object_id(report_id)}
+        if company_id:
+            query["company_id"] = company_id
+        doc = await self._collection.find_one(query)
         return FinancialReport(**self._to_entity(doc)) if doc else None
 
     async def list_reports(
         self,
+        company_id: str,
         report_type: ReportType | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
         skip: int = 0,
         limit: int = 50,
     ) -> list[FinancialReport]:
-        query: dict = {}
+        query: dict = {"company_id": company_id}
         if report_type:
             query["report_type"] = report_type.value
         if from_date or to_date:

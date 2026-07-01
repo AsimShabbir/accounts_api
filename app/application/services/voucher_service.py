@@ -1,10 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.application.exceptions import ConflictError, NotFoundError, ValidationError
+from app.application.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
+from app.domain.entities.company import Company
+from app.domain.entities.user_registration import UserRegistration
 from app.domain.entities.voucher import LedgerEntry, Voucher, VoucherEntry
 from app.domain.enums import VoucherStatus, VoucherType
 from app.domain.repositories.chart_of_account_repository import ChartOfAccountRepository
+from app.domain.repositories.company_repository import CompanyRepository
 from app.domain.repositories.voucher_repository import VoucherRepository
 
 
@@ -13,23 +16,33 @@ class VoucherService:
         self,
         voucher_repository: VoucherRepository,
         account_repository: ChartOfAccountRepository,
+        company_repository: CompanyRepository,
     ) -> None:
         self._vouchers = voucher_repository
         self._accounts = account_repository
+        self._companies = company_repository
 
-    async def create_voucher(self, data: dict) -> Voucher:
+    async def create_voucher(
+        self,
+        user: UserRegistration,
+        company_id: str,
+        data: dict,
+    ) -> Voucher:
+        await self._get_user_company(user, company_id)
+
         voucher_type = VoucherType(data["voucher_type"])
-        entries = await self._build_entries(data["entries"])
+        entries = await self._build_entries(company_id, data["entries"])
         total_debit, total_credit = self._calculate_totals(entries)
         self._validate_double_entry(entries, total_debit, total_credit)
 
         voucher_number = data.get("voucher_number") or await self._vouchers.get_next_voucher_number(
-            voucher_type
+            company_id, voucher_type
         )
-        if await self._vouchers.get_by_number(voucher_number):
+        if await self._vouchers.get_by_number(company_id, voucher_number):
             raise ConflictError(f"Voucher number '{voucher_number}' already exists")
 
         voucher = Voucher(
+            company_id=company_id,
             voucher_number=voucher_number,
             voucher_type=voucher_type,
             voucher_date=data["voucher_date"],
@@ -42,14 +55,22 @@ class VoucherService:
         )
         return await self._vouchers.create(voucher)
 
-    async def get_voucher(self, voucher_id: str) -> Voucher:
-        voucher = await self._vouchers.get_by_id(voucher_id)
+    async def get_voucher(
+        self,
+        user: UserRegistration,
+        company_id: str,
+        voucher_id: str,
+    ) -> Voucher:
+        await self._get_user_company(user, company_id)
+        voucher = await self._vouchers.get_by_id(voucher_id, company_id)
         if not voucher:
             raise NotFoundError("Voucher not found")
         return voucher
 
     async def list_vouchers(
         self,
+        user: UserRegistration,
+        company_id: str,
         status: VoucherStatus | None = None,
         voucher_type: VoucherType | None = None,
         from_date=None,
@@ -57,12 +78,21 @@ class VoucherService:
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[list[Voucher], int]:
-        vouchers = await self._vouchers.list_all(status, voucher_type, from_date, to_date, skip, limit)
-        total = await self._vouchers.count(status, voucher_type, from_date, to_date)
+        await self._get_user_company(user, company_id)
+        vouchers = await self._vouchers.list_all(
+            company_id, status, voucher_type, from_date, to_date, skip, limit
+        )
+        total = await self._vouchers.count(company_id, status, voucher_type, from_date, to_date)
         return vouchers, total
 
-    async def update_voucher(self, voucher_id: str, data: dict) -> Voucher:
-        voucher = await self.get_voucher(voucher_id)
+    async def update_voucher(
+        self,
+        user: UserRegistration,
+        company_id: str,
+        voucher_id: str,
+        data: dict,
+    ) -> Voucher:
+        voucher = await self.get_voucher(user, company_id, voucher_id)
         if voucher.status == VoucherStatus.POSTED:
             raise ValidationError("Posted vouchers cannot be edited")
         if voucher.status == VoucherStatus.CANCELLED:
@@ -77,7 +107,7 @@ class VoucherService:
         if "narration" in data:
             voucher.narration = data["narration"]
         if "entries" in data:
-            entries = await self._build_entries(data["entries"])
+            entries = await self._build_entries(company_id, data["entries"])
             total_debit, total_credit = self._calculate_totals(entries)
             self._validate_double_entry(entries, total_debit, total_credit)
             voucher.entries = entries
@@ -90,8 +120,13 @@ class VoucherService:
             raise NotFoundError("Voucher not found")
         return updated
 
-    async def cancel_voucher(self, voucher_id: str) -> Voucher:
-        voucher = await self.get_voucher(voucher_id)
+    async def cancel_voucher(
+        self,
+        user: UserRegistration,
+        company_id: str,
+        voucher_id: str,
+    ) -> Voucher:
+        voucher = await self.get_voucher(user, company_id, voucher_id)
         if voucher.status == VoucherStatus.POSTED:
             raise ValidationError("Posted vouchers cannot be cancelled. Create a reversing entry instead.")
         if voucher.status == VoucherStatus.CANCELLED:
@@ -105,8 +140,13 @@ class VoucherService:
             raise NotFoundError("Voucher not found")
         return updated
 
-    async def post_voucher(self, voucher_id: str) -> Voucher:
-        voucher = await self.get_voucher(voucher_id)
+    async def post_voucher(
+        self,
+        user: UserRegistration,
+        company_id: str,
+        voucher_id: str,
+    ) -> Voucher:
+        voucher = await self.get_voucher(user, company_id, voucher_id)
         if voucher.status == VoucherStatus.POSTED:
             raise ValidationError("Voucher is already posted")
         if voucher.status == VoucherStatus.CANCELLED:
@@ -116,7 +156,7 @@ class VoucherService:
 
         ledger_entries: list[LedgerEntry] = []
         for entry in voucher.entries:
-            account = await self._accounts.get_by_id(entry.account_id)
+            account = await self._accounts.get_by_id(entry.account_id, company_id)
             if not account:
                 raise NotFoundError(f"Account '{entry.account_code}' not found")
             if not account.is_active:
@@ -130,11 +170,12 @@ class VoucherService:
                 float(entry.credit_amount),
             )
 
-            updated_account = await self._accounts.get_by_id(entry.account_id)
+            updated_account = await self._accounts.get_by_id(entry.account_id, company_id)
             running_balance = updated_account.current_balance if updated_account else Decimal("0.00")
 
             ledger_entries.append(
                 LedgerEntry(
+                    company_id=company_id,
                     account_id=entry.account_id,
                     account_code=entry.account_code,
                     account_name=entry.account_name,
@@ -159,13 +200,19 @@ class VoucherService:
             raise NotFoundError("Voucher not found")
         return updated
 
-    async def _build_entries(self, raw_entries: list[dict]) -> list[VoucherEntry]:
+    async def _get_user_company(self, user: UserRegistration, company_id: str) -> Company:
+        company = await self._companies.get_for_user(company_id, user.id or "")
+        if not company:
+            raise NotFoundError("Company not found")
+        return company
+
+    async def _build_entries(self, company_id: str, raw_entries: list[dict]) -> list[VoucherEntry]:
         if len(raw_entries) < 2:
             raise ValidationError("A voucher must have at least two entries")
 
         entries: list[VoucherEntry] = []
         for index, raw in enumerate(raw_entries, start=1):
-            account = await self._accounts.get_by_id(raw["account_id"])
+            account = await self._accounts.get_by_id(raw["account_id"], company_id)
             if not account:
                 raise NotFoundError(f"Account with id '{raw['account_id']}' not found")
 

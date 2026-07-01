@@ -31,6 +31,7 @@ class ChartOfAccountUpdate(BaseModel):
 
 class ChartOfAccountResponse(BaseModel):
     id: str
+    company_id: str
     code: str
     name: str
     account_type: AccountType

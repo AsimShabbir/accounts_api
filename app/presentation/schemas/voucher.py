@@ -49,6 +49,7 @@ class VoucherEntryResponse(BaseModel):
 
 class VoucherResponse(BaseModel):
     id: str
+    company_id: str
     voucher_number: str
     voucher_type: VoucherType
     voucher_date: date

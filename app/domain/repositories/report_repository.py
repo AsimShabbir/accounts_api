@@ -11,12 +11,13 @@ class ReportRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, report_id: str) -> FinancialReport | None:
+    async def get_by_id(self, report_id: str, company_id: str | None = None) -> FinancialReport | None:
         pass
 
     @abstractmethod
     async def list_reports(
         self,
+        company_id: str,
         report_type: ReportType | None = None,
         from_date: date | None = None,
         to_date: date | None = None,

@@ -1,10 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.domain.entities.voucher import LedgerEntry, Voucher, VoucherEntry
+from app.domain.entities.voucher import LedgerEntry, Voucher
 from app.domain.enums import VoucherStatus, VoucherType
 from app.domain.repositories.voucher_repository import VoucherRepository
 from app.infrastructure.repositories.mongo_utils import prepare_for_insert, serialize_document, to_object_id
@@ -30,16 +29,22 @@ class MongoVoucherRepository(VoucherRepository):
         created = await self._vouchers.find_one({"_id": result.inserted_id})
         return Voucher(**self._to_voucher_entity(created))
 
-    async def get_by_id(self, voucher_id: str) -> Voucher | None:
-        doc = await self._vouchers.find_one({"_id": to_object_id(voucher_id)})
+    async def get_by_id(self, voucher_id: str, company_id: str | None = None) -> Voucher | None:
+        query: dict = {"_id": to_object_id(voucher_id)}
+        if company_id:
+            query["company_id"] = company_id
+        doc = await self._vouchers.find_one(query)
         return Voucher(**self._to_voucher_entity(doc)) if doc else None
 
-    async def get_by_number(self, voucher_number: str) -> Voucher | None:
-        doc = await self._vouchers.find_one({"voucher_number": voucher_number})
+    async def get_by_number(self, company_id: str, voucher_number: str) -> Voucher | None:
+        doc = await self._vouchers.find_one(
+            {"company_id": company_id, "voucher_number": voucher_number}
+        )
         return Voucher(**self._to_voucher_entity(doc)) if doc else None
 
     async def list_all(
         self,
+        company_id: str,
         status: VoucherStatus | None = None,
         voucher_type: VoucherType | None = None,
         from_date: date | None = None,
@@ -47,18 +52,19 @@ class MongoVoucherRepository(VoucherRepository):
         skip: int = 0,
         limit: int = 100,
     ) -> list[Voucher]:
-        query = self._build_query(status, voucher_type, from_date, to_date)
+        query = self._build_query(company_id, status, voucher_type, from_date, to_date)
         cursor = self._vouchers.find(query).sort("voucher_date", -1).skip(skip).limit(limit)
         return [Voucher(**self._to_voucher_entity(doc)) async for doc in cursor]
 
     async def count(
         self,
+        company_id: str,
         status: VoucherStatus | None = None,
         voucher_type: VoucherType | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
     ) -> int:
-        query = self._build_query(status, voucher_type, from_date, to_date)
+        query = self._build_query(company_id, status, voucher_type, from_date, to_date)
         return await self._vouchers.count_documents(query)
 
     async def update(self, voucher_id: str, voucher: Voucher) -> Voucher | None:
@@ -73,12 +79,12 @@ class MongoVoucherRepository(VoucherRepository):
         doc = await self._vouchers.find_one({"_id": to_object_id(voucher_id)})
         return Voucher(**self._to_voucher_entity(doc))
 
-    async def get_next_voucher_number(self, voucher_type: VoucherType) -> str:
+    async def get_next_voucher_number(self, company_id: str, voucher_type: VoucherType) -> str:
         prefix = VOUCHER_PREFIX[voucher_type]
         year = datetime.utcnow().year
         pattern = f"^{prefix}-{year}-"
         latest = await self._vouchers.find_one(
-            {"voucher_number": {"$regex": pattern}},
+            {"company_id": company_id, "voucher_number": {"$regex": pattern}},
             sort=[("voucher_number", -1)],
         )
         if not latest:
@@ -100,11 +106,12 @@ class MongoVoucherRepository(VoucherRepository):
 
     async def get_ledger_entries(
         self,
+        company_id: str,
         account_id: str,
         from_date: date | None = None,
         to_date: date | None = None,
     ) -> list[LedgerEntry]:
-        query: dict = {"account_id": account_id}
+        query: dict = {"company_id": company_id, "account_id": account_id}
         if from_date or to_date:
             date_filter: dict = {}
             if from_date:
@@ -121,12 +128,13 @@ class MongoVoucherRepository(VoucherRepository):
 
     def _build_query(
         self,
+        company_id: str,
         status: VoucherStatus | None,
         voucher_type: VoucherType | None,
         from_date: date | None,
         to_date: date | None,
     ) -> dict:
-        query: dict = {}
+        query: dict = {"company_id": company_id}
         if status:
             query["status"] = status.value
         if voucher_type:

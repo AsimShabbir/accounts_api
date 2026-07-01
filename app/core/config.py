@@ -18,5 +18,17 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Comma-separated browser origins allowed to call this API (web app URLs).
+    CORS_ORIGINS: str = (
+        "http://localhost:8098,"
+        "http://127.0.0.1:8098,"
+        "http://localhost:5174,"
+        "http://127.0.0.1:5174"
+    )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
 
 settings = Settings()

@@ -1,12 +1,18 @@
-"""Seed default chart of accounts for the accounting API."""
+"""Seed default chart of accounts for a company."""
 
 import asyncio
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from decimal import Decimal
 
 from app.core.database import close_mongodb_connection, connect_to_mongodb, get_database
 from app.domain.entities.chart_of_account import ChartOfAccount
-from app.domain.enums import AccountNature, AccountType, account_nature_for_type
+from app.domain.enums import AccountType, account_nature_for_type
 from app.infrastructure.repositories.chart_of_account_mongo_repository import MongoChartOfAccountRepository
+from app.infrastructure.repositories.company_mongo_repository import MongoCompanyRepository
 
 DEFAULT_ACCOUNTS = [
     {"code": "1000", "name": "Assets", "account_type": AccountType.ASSET, "is_group": True},
@@ -43,13 +49,22 @@ DEFAULT_ACCOUNTS = [
 ]
 
 
-async def seed() -> None:
+async def seed(company_id: str) -> None:
     await connect_to_mongodb()
+    company_repo = MongoCompanyRepository(get_database())
+    company = await company_repo.get_by_id(company_id)
+    if not company:
+        print(f"Company not found: {company_id}")
+        await close_mongodb_connection()
+        return
+
     repository = MongoChartOfAccountRepository(get_database())
     code_to_id: dict[str, str] = {}
 
+    print(f"Seeding chart of accounts for: {company.name}")
+
     for item in DEFAULT_ACCOUNTS:
-        existing = await repository.get_by_code(item["code"])
+        existing = await repository.get_by_code(company_id, item["code"])
         if existing:
             code_to_id[item["code"]] = existing.id or ""
             print(f"Skipped existing account: {item['code']}")
@@ -60,11 +75,12 @@ async def seed() -> None:
         if parent_code := item.get("parent_code"):
             parent_id = code_to_id.get(parent_code)
             if parent_id:
-                parent = await repository.get_by_id(parent_id)
+                parent = await repository.get_by_id(parent_id, company_id)
                 level = (parent.level + 1) if parent else 2
 
         account_type = item["account_type"]
         account = ChartOfAccount(
+            company_id=company_id,
             code=item["code"],
             name=item["name"],
             account_type=account_type,
@@ -84,4 +100,7 @@ async def seed() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    if len(sys.argv) < 2:
+        print("Usage: py scripts/seed_chart_of_accounts.py <company_id>")
+        sys.exit(1)
+    asyncio.run(seed(sys.argv[1]))

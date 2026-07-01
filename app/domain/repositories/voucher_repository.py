@@ -11,16 +11,17 @@ class VoucherRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, voucher_id: str) -> Voucher | None:
+    async def get_by_id(self, voucher_id: str, company_id: str | None = None) -> Voucher | None:
         pass
 
     @abstractmethod
-    async def get_by_number(self, voucher_number: str) -> Voucher | None:
+    async def get_by_number(self, company_id: str, voucher_number: str) -> Voucher | None:
         pass
 
     @abstractmethod
     async def list_all(
         self,
+        company_id: str,
         status: VoucherStatus | None = None,
         voucher_type: VoucherType | None = None,
         from_date: date | None = None,
@@ -33,6 +34,7 @@ class VoucherRepository(ABC):
     @abstractmethod
     async def count(
         self,
+        company_id: str,
         status: VoucherStatus | None = None,
         voucher_type: VoucherType | None = None,
         from_date: date | None = None,
@@ -45,7 +47,7 @@ class VoucherRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_next_voucher_number(self, voucher_type: VoucherType) -> str:
+    async def get_next_voucher_number(self, company_id: str, voucher_type: VoucherType) -> str:
         pass
 
     @abstractmethod
@@ -55,6 +57,7 @@ class VoucherRepository(ABC):
     @abstractmethod
     async def get_ledger_entries(
         self,
+        company_id: str,
         account_id: str,
         from_date: date | None = None,
         to_date: date | None = None,

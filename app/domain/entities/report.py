@@ -20,6 +20,7 @@ class ReportLineItem(BaseModel):
 
 class FinancialReport(BaseModel):
     id: str | None = None
+    company_id: str
     report_type: ReportType
     report_title: str
     from_date: date | None = None

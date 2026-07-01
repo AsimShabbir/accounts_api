@@ -18,6 +18,7 @@ class VoucherEntry(BaseModel):
 
 class Voucher(BaseModel):
     id: str | None = None
+    company_id: str
     voucher_number: str
     voucher_type: VoucherType
     voucher_date: date
@@ -37,6 +38,7 @@ class Voucher(BaseModel):
 
 class LedgerEntry(BaseModel):
     id: str | None = None
+    company_id: str
     account_id: str
     account_code: str
     account_name: str

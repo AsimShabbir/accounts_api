@@ -20,6 +20,7 @@ class ReportLineItemResponse(BaseModel):
 
 class FinancialReportResponse(BaseModel):
     id: str
+    company_id: str
     report_type: ReportType
     report_title: str
     from_date: date | None

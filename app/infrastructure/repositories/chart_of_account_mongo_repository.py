@@ -1,7 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.domain.entities.chart_of_account import ChartOfAccount
@@ -20,22 +19,26 @@ class MongoChartOfAccountRepository(ChartOfAccountRepository):
         created = await self._collection.find_one({"_id": result.inserted_id})
         return ChartOfAccount(**self._to_entity(created))
 
-    async def get_by_id(self, account_id: str) -> ChartOfAccount | None:
-        doc = await self._collection.find_one({"_id": to_object_id(account_id)})
+    async def get_by_id(self, account_id: str, company_id: str | None = None) -> ChartOfAccount | None:
+        query: dict = {"_id": to_object_id(account_id)}
+        if company_id:
+            query["company_id"] = company_id
+        doc = await self._collection.find_one(query)
         return ChartOfAccount(**self._to_entity(doc)) if doc else None
 
-    async def get_by_code(self, code: str) -> ChartOfAccount | None:
-        doc = await self._collection.find_one({"code": code})
+    async def get_by_code(self, company_id: str, code: str) -> ChartOfAccount | None:
+        doc = await self._collection.find_one({"company_id": company_id, "code": code})
         return ChartOfAccount(**self._to_entity(doc)) if doc else None
 
     async def list_all(
         self,
+        company_id: str,
         account_type: AccountType | None = None,
         is_active: bool | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[ChartOfAccount]:
-        query: dict = {}
+        query: dict = {"company_id": company_id}
         if account_type:
             query["account_type"] = account_type.value
         if is_active is not None:
@@ -46,10 +49,11 @@ class MongoChartOfAccountRepository(ChartOfAccountRepository):
 
     async def count(
         self,
+        company_id: str,
         account_type: AccountType | None = None,
         is_active: bool | None = None,
     ) -> int:
-        query: dict = {}
+        query: dict = {"company_id": company_id}
         if account_type:
             query["account_type"] = account_type.value
         if is_active is not None:
@@ -92,8 +96,8 @@ class MongoChartOfAccountRepository(ChartOfAccountRepository):
             {"$set": {"current_balance": float(new_balance), "updated_at": datetime.utcnow()}},
         )
 
-    async def get_balances_as_of(self, as_of_date: date) -> list[ChartOfAccount]:
-        return await self.list_all(is_active=True, skip=0, limit=10000)
+    async def get_balances_as_of(self, company_id: str, as_of_date: date) -> list[ChartOfAccount]:
+        return await self.list_all(company_id, is_active=True, skip=0, limit=10000)
 
     def _to_entity(self, doc: dict | None) -> dict:
         data = serialize_document(doc) or {}

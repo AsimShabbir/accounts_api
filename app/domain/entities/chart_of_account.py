@@ -8,6 +8,7 @@ from app.domain.enums import AccountNature, AccountType
 
 class ChartOfAccount(BaseModel):
     id: str | None = None
+    company_id: str
     code: str
     name: str
     account_type: AccountType

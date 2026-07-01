@@ -11,16 +11,17 @@ class ChartOfAccountRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, account_id: str) -> ChartOfAccount | None:
+    async def get_by_id(self, account_id: str, company_id: str | None = None) -> ChartOfAccount | None:
         pass
 
     @abstractmethod
-    async def get_by_code(self, code: str) -> ChartOfAccount | None:
+    async def get_by_code(self, company_id: str, code: str) -> ChartOfAccount | None:
         pass
 
     @abstractmethod
     async def list_all(
         self,
+        company_id: str,
         account_type: AccountType | None = None,
         is_active: bool | None = None,
         skip: int = 0,
@@ -31,6 +32,7 @@ class ChartOfAccountRepository(ABC):
     @abstractmethod
     async def count(
         self,
+        company_id: str,
         account_type: AccountType | None = None,
         is_active: bool | None = None,
     ) -> int:
@@ -49,5 +51,5 @@ class ChartOfAccountRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_balances_as_of(self, as_of_date: date) -> list[ChartOfAccount]:
+    async def get_balances_as_of(self, company_id: str, as_of_date: date) -> list[ChartOfAccount]:
         pass

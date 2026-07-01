@@ -2,10 +2,12 @@ from fastapi import Depends
 
 from app.application.services.auth_service import AuthService
 from app.application.services.chart_of_account_service import ChartOfAccountService
+from app.application.services.company_service import CompanyService
 from app.application.services.report_service import ReportService
 from app.application.services.voucher_service import VoucherService
 from app.core.database import get_database
 from app.infrastructure.repositories.chart_of_account_mongo_repository import MongoChartOfAccountRepository
+from app.infrastructure.repositories.company_mongo_repository import MongoCompanyRepository
 from app.infrastructure.repositories.refresh_token_mongo_repository import MongoRefreshTokenRepository
 from app.infrastructure.repositories.user_registration_mongo_repository import MongoUserRegistrationRepository
 from app.infrastructure.repositories.report_mongo_repository import MongoReportRepository
@@ -22,14 +24,22 @@ def get_auth_service() -> AuthService:
 def get_chart_of_account_service() -> ChartOfAccountService:
     db = get_database()
     repository = MongoChartOfAccountRepository(db)
-    return ChartOfAccountService(repository)
+    company_repo = MongoCompanyRepository(db)
+    return ChartOfAccountService(repository, company_repo)
+
+
+def get_company_service() -> CompanyService:
+    db = get_database()
+    repository = MongoCompanyRepository(db)
+    return CompanyService(repository)
 
 
 def get_voucher_service() -> VoucherService:
     db = get_database()
     account_repo = MongoChartOfAccountRepository(db)
     voucher_repo = MongoVoucherRepository(db)
-    return VoucherService(voucher_repo, account_repo)
+    company_repo = MongoCompanyRepository(db)
+    return VoucherService(voucher_repo, account_repo, company_repo)
 
 
 def get_report_service() -> ReportService:
@@ -37,4 +47,5 @@ def get_report_service() -> ReportService:
     account_repo = MongoChartOfAccountRepository(db)
     voucher_repo = MongoVoucherRepository(db)
     report_repo = MongoReportRepository(db)
-    return ReportService(account_repo, voucher_repo, report_repo)
+    company_repo = MongoCompanyRepository(db)
+    return ReportService(account_repo, voucher_repo, report_repo, company_repo)

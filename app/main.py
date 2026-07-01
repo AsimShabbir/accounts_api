@@ -1,14 +1,18 @@
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.application.exceptions import ApplicationError
 from app.core.config import settings
 from app.core.database import close_mongodb_connection, connect_to_mongodb
-from app.presentation.api.v1 import auth, chart_of_accounts, reports, vouchers
+
+from app.presentation.api.v1 import auth, chart_of_accounts, companies, reports, vouchers
 from app.presentation.auth_dependencies import get_current_user
 
 PUBLIC_OPERATIONS = {
@@ -34,11 +38,16 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+static_dir = Path(__file__).resolve().parent.parent / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 def custom_openapi():
@@ -87,6 +96,7 @@ async def health_check():
 protected = [Depends(get_current_user)]
 
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(companies.router, prefix=settings.API_V1_PREFIX, dependencies=protected)
 app.include_router(chart_of_accounts.router, prefix=settings.API_V1_PREFIX, dependencies=protected)
 app.include_router(vouchers.router, prefix=settings.API_V1_PREFIX, dependencies=protected)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX, dependencies=protected)

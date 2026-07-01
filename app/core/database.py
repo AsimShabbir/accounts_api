@@ -30,19 +30,29 @@ def get_database() -> AsyncIOMotorDatabase:
 async def _ensure_indexes() -> None:
     db = get_database()
 
-    await db.chart_of_accounts.create_index("code", unique=True)
+    existing_coa_indexes = await db.chart_of_accounts.index_information()
+    if "code_1" in existing_coa_indexes:
+        await db.chart_of_accounts.drop_index("code_1")
+
+    await db.chart_of_accounts.create_index([("company_id", 1), ("code", 1)], unique=True)
+    await db.chart_of_accounts.create_index("company_id")
     await db.chart_of_accounts.create_index("account_type")
     await db.chart_of_accounts.create_index("parent_id")
 
-    await db.vouchers.create_index("voucher_number", unique=True)
+    await db.companies.create_index([("user_id", 1), ("company_id", 1)], unique=True)
+    await db.companies.create_index("user_id")
+
+    await db.vouchers.create_index([("company_id", 1), ("voucher_number", 1)], unique=True)
+    await db.vouchers.create_index("company_id")
     await db.vouchers.create_index("voucher_date")
     await db.vouchers.create_index("status")
-    await db.vouchers.create_index([("entries.account_id", 1)])
 
-    await db.ledger_entries.create_index([("account_id", 1), ("entry_date", 1)])
+    await db.ledger_entries.create_index([("company_id", 1), ("account_id", 1), ("entry_date", 1)])
+    await db.ledger_entries.create_index("company_id")
     await db.ledger_entries.create_index("voucher_id")
 
-    await db.reports.create_index([("report_type", 1), ("generated_at", -1)])
+    await db.reports.create_index([("company_id", 1), ("report_type", 1), ("generated_at", -1)])
+    await db.reports.create_index("company_id")
     await db.reports.create_index("report_date")
 
     await db.user_registrations.create_index("email", unique=True)

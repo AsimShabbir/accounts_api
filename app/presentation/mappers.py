@@ -7,6 +7,7 @@ from app.presentation.schemas.voucher import VoucherEntryResponse, VoucherRespon
 def to_voucher_response(voucher: Voucher) -> VoucherResponse:
     return VoucherResponse(
         id=voucher.id or "",
+        company_id=voucher.company_id,
         voucher_number=voucher.voucher_number,
         voucher_type=voucher.voucher_type,
         voucher_date=voucher.voucher_date,
@@ -26,6 +27,7 @@ def to_voucher_response(voucher: Voucher) -> VoucherResponse:
 def to_report_response(report: FinancialReport) -> FinancialReportResponse:
     return FinancialReportResponse(
         id=report.id or "",
+        company_id=report.company_id,
         report_type=report.report_type,
         report_title=report.report_title,
         from_date=report.from_date,
